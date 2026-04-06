@@ -494,12 +494,16 @@ _TYPE_GANTT_COLORS = {
 }
 
 
-def _render_continuous_interval_timeline(timeline: list, well_name: str):
+def _render_continuous_interval_timeline(timeline: list, well_name: str, prod_dates=None):
     if not timeline:
         st.info("No timeline data available.")
         return
 
     last_date = max(ev["date"] for ev in timeline)
+    if prod_dates is not None and len(prod_dates) > 0:
+        pd_max = pd.Timestamp(prod_dates.max())
+        if pd_max > pd.Timestamp(last_date):
+            last_date = pd_max
 
     class _Slot:
         _id_ctr = 0
@@ -583,7 +587,7 @@ def _render_continuous_interval_timeline(timeline: list, well_name: str):
                 f"Opened: {t_start.strftime('%d %b %Y') if hasattr(t_start, 'strftime') else t_start}<br>"
                 + (f"Squeezed: {t_end.strftime('%d %b %Y') if hasattr(t_end, 'strftime') else t_end}"
                    if not is_open
-                   else f"Still open as of {t_end.strftime('%d %b %Y') if hasattr(t_end, 'strftime') else t_end}")
+                   else f"Still open as of {pd.Timestamp(t_end).strftime('%d %b %Y') if hasattr(t_end, 'strftime') else t_end}")
         )
 
         fig.add_trace(go.Scatter(
@@ -642,7 +646,7 @@ def _render_continuous_interval_timeline(timeline: list, well_name: str):
 
     st.plotly_chart(fig, use_container_width=True, config=_chart_config(f"perf_continuity_{well_name}"))
     st.caption(
-        "🔵 Blue = Initial  |  🟢 Green = Additional  |  🟡 Yellow = Reperforation  "
+        "🔵 Blue = Initial Perforation  |  🟢 Green = Additional Perforation  |  🟡 Yellow = Reperforation  "
         "|  🟠 Orange dashed line = Squeeze event"
     )
 
@@ -692,7 +696,7 @@ def render_perf_history_section(
 
     _render_grouped_timeline(timeline)
     st.markdown("##### 📈 Perforation Interval Continuity")
-    _render_continuous_interval_timeline(timeline, well_name)
+    _render_continuous_interval_timeline(timeline, well_name, prod_dates)
 
 def _build_chart_event_map(timeline: list) -> list:
     result = []
@@ -967,7 +971,7 @@ if view_mode == "Field View" and field_col:
     f_Di = sb.slider("Decline Rate (Di, /year)", 0.001, 2.0, 0.3, key="f_Di")
     f_b = sb.slider("Decline Exponent (b)", 0.01, 1.0, 0.5, key="f_b")
 
-    # ── NEW: Multi-Phase Development Tool (Field View) ──
+    # ── Multi-Phase Development Tool (Field View) ──
     sb.markdown("---")
     sb.header("🚧 Multi-Phase Development")
     f_date_labels_all = f_dates.dt.strftime("%Y-%m-%d").tolist()
@@ -1241,18 +1245,7 @@ qi = sb.number_input("Initial Rate (qi)", value=round(float(actual[start_idx]), 
 Di = sb.slider("Decline Rate (Di, /year)", 0.001, 2.0, 0.3)
 b = sb.slider("Decline Exponent (b)", 0.01, 1.0, 0.5)
 
-# ── NEW: Multi-Phase Development Tool (Well View) ──
-sb.markdown("---")
-sb.header("🚧 Multi-Phase Development")
 date_labels_all = dates.dt.strftime("%Y-%m-%d").tolist()
-w_n_phases = int(sb.number_input("Number of Development Phases", 1, 5, 1, key="w_n_phases"))
-w_phase_boundaries = []
-if w_n_phases > 1:
-    for _pi in range(w_n_phases - 1):
-        _after = peak_idx if _pi == 0 else (date_labels_all.index(str(w_phase_boundaries[-1].date())) if w_phase_boundaries else peak_idx)
-        _auto_pi = auto_detect_phase_start(actual, _after)
-        _wp = sb.selectbox(f"Phase {_pi + 2} Start Date", date_labels_all, index=_auto_pi, key=f"w_pb_{_pi}")
-        w_phase_boundaries.append(pd.Timestamp(_wp))
 
 # ─────────────────────────────────────────
 # Compute curves
@@ -1350,7 +1343,7 @@ _TYPE_VLINE_COLORS = {
     "Squeeze": "#ff9800",
 }
 _TYPE_SHORT_LABELS = {
-    "Initial": "Initial",
+    "Initial": "Initial Perforation",
     "Additional": "Addl.",
     "Reperforation": "Reperf.",
     "Squeeze": "Squeeze",
@@ -1483,34 +1476,6 @@ fig.add_annotation(
     ax=65, ay=0,
     arrowhead=2, arrowwidth=1.5, arrowcolor="yellow", showarrow=True,
 )
-
-# ── Multi-Phase Chart Annotations (Well View) ──
-_w_phase_dates = [dates.iloc[0]] + w_phase_boundaries + [dates.iloc[-1]]
-for _pi in range(w_n_phases):
-    _px0 = _w_phase_dates[_pi]
-    _px1 = _w_phase_dates[_pi+1]
-    _pname = PHASE_NAMES[_pi] if _pi < len(PHASE_NAMES) else f"Phase {_pi+1}"
-    _pfc = PHASE_FILL_COLORS[_pi % len(PHASE_FILL_COLORS)]
-    _pbc = PHASE_BORDER_COLORS[_pi % len(PHASE_BORDER_COLORS)]
-    _pfont = PHASE_FONT_COLORS[_pi % len(PHASE_FONT_COLORS)]
-
-    fig.add_vrect(x0=_px0, x1=_px1, fillcolor=_pfc, layer="below", line_width=0,
-                  annotation_text=f"<b>{_pname}</b>", annotation_position="top left",
-                  annotation_font_size=13, annotation_font_color=_pfont)
-    if _pi > 0:
-        _bdate = _w_phase_dates[_pi]
-        _near_idx = (dates - _bdate).abs().argmin()
-        _b_rate = actual[_near_idx]
-        fig.add_vline(x=_bdate, line_width=2, line_dash="dash", line_color=_pbc)
-        fig.add_annotation(x=_bdate, y=_b_rate, text=f"<b>{_pname}<br>Rate: {_b_rate:,.0f}</b>",
-                           font=dict(size=13, color=_pfont), bgcolor="rgba(20,20,20,0.85)", bordercolor=_pfont,
-                           borderwidth=1, xanchor="left", yanchor="middle", ax=50, ay=30,
-                           arrowhead=2, arrowwidth=1.5, arrowcolor=_pfont, showarrow=True)
-        # Highlighted bottom box
-        fig.add_annotation(x=_bdate, y=w_y_min + (_pi - 1) * (w_y_max - w_y_min) * 0.05,
-                           text=f"<b>▲ {_pname} starts here  |  Rate: {_b_rate:,.0f}</b>",
-                           font=dict(size=12, color=_pfont), bgcolor=_pbc.replace("0.55", "0.30"),
-                           bordercolor=_pfont, borderwidth=2, xanchor="left", yanchor="top", showarrow=False, yref="y")
 
 _apply_plateaus_to_fig(fig, st.session_state["w_plateaus"])
 _apply_comments_to_fig(fig, st.session_state["w_comments"])
