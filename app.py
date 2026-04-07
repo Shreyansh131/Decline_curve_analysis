@@ -968,7 +968,7 @@ if view_mode == "Field View" and field_col:
     f_show_hyp = sb.checkbox("Hyperbolic", True, key="f_hyp")
     f_show_har = sb.checkbox("Harmonic", True, key="f_har")
     f_qi = sb.number_input("Initial Rate (qi)", value=round(float(f_actual[f_start_idx]), 2), key=f"f_qi_{f_start_idx}")
-    f_Di = sb.slider("Decline Rate (Di, /year)", 0.001, 2.0, 0.3, key="f_Di")
+    f_Di = sb.slider("Decline Rate (Di, /year)", 0.001, 5.0, 0.3, key="f_Di")
     f_b = sb.slider("Decline Exponent (b)", 0.01, 1.0, 0.5, key="f_b")
 
     # ── Multi-Phase Development Tool (Field View) ──
