@@ -1242,7 +1242,7 @@ show_hyp = sb.checkbox("Hyperbolic", True)
 show_har = sb.checkbox("Harmonic", True)
 
 qi = sb.number_input("Initial Rate (qi)", value=round(float(actual[start_idx]), 2), key=f"qi_{start_idx}")
-Di = sb.slider("Decline Rate (Di, /year)", 0.001, 2.0, 0.3)
+Di = sb.slider("Decline Rate (Di, /year)", 0.001, 5.0, 0.3)
 b = sb.slider("Decline Exponent (b)", 0.01, 1.0, 0.5)
 
 date_labels_all = dates.dt.strftime("%Y-%m-%d").tolist()
